@@ -204,70 +204,52 @@ ORDER BY  week_number) as  weekly_signup;
 # (3) : Analyze the retention of users on a weekly basis after signing up for a product.
 #  Write an SQL query to calculate the weekly retention of users based on their sign-up cohort.
 
+with activities as(
+select occurred_at, event_name from events )
 SELECT
-distinct user_id,
-COUNT(user_id),
-SUM(CASE WHEN retention_week = 1 Then 1 Else 0 END) as per_week_retention
+    week_number,
+    total_activities,
+    SUM(total_activities) OVER (ORDER BY week_number) AS cumulative_activities
 FROM
-(
-SELECT
-a.user_id,
-a.signup_week,
-b.engagement_week,
-b.engagement_week - a.signup_week as retention_week
-FROM
-(
-(SELECT distinct user_id, extract(week from occurred_at) as signup_week from tutorial.yammer_events
-WHERE event_type = 'signup_flow'
-and event_name = 'complete_signup'
-)a
-LEFT JOIN
-(SELECT distinct user_id, extract (week from occurred_at) as engagement_week FROM tutorial.yammer_events
-where event_type = 'engagement'
-)b
-on a.user_id = b.user_id
-)
-)d
-group by user_id
-order by user_id;
+(SELECT
+    WEEK(occurred_at) AS week_number,
+    COUNT(event_name) as total_activities
+FROM activities
+GROUP BY week_number
+ORDER BY  week_number) as  weekly_activities;
 
-WITH user_retention AS (
-    SELECT
-        a.user_id,
-        a.signup_week,
-        b.engagement_week,
-        b.engagement_week - a.signup_week AS retention_week
-    FROM
-        (
-            SELECT
-                DISTINCT user_id,
-                EXTRACT(WEEK FROM occurred_at) AS signup_week
-            FROM
-                tutorial.yammer_events
-            WHERE
-                event_type = 'signup_flow'
-                AND event_name = 'complete_signup'
-        ) a
-        LEFT JOIN (
-            SELECT
-                DISTINCT user_id,
-                EXTRACT(WEEK FROM occurred_at) AS engagement_week
-            FROM
-                tutorial.yammer_events
-            WHERE
-                event_type = 'engagement'
-        ) b ON a.user_id = b.user_id
-)
+
+# (4) : Weekly Engagement Per Device: Measure the activeness of users on a weekly basis per device. 
+#  Write an SQL query to calculate the weekly engagement per device.
+
 SELECT
-    user_id,
-    COUNT(user_id) AS total_signups,
-    SUM(CASE WHEN retention_week = 1 THEN 1 ELSE 0 END) AS per_week_retention
+week(occurred_at) as week_num,
+device,
+COUNT(distinct user_id) as no_of_users
 FROM
-    user_retention
-GROUP BY
-    user_id
-ORDER BY
-    user_id;
+events
+where event_type = 'engagement'
+GROUP by week_num, device
+order by week_num;
+
+
+# (5) Email Engagement Analysis:  Analyze how users are engaging with the email service & Write an SQL query to calculate the email engagement metrics.
+
+
+SELECT
+  100.0 * COUNT(CASE WHEN email = 'email_opened' THEN 1 END) / COUNT(CASE WHEN email = 'email_sent' THEN 1 END) AS email_opening_percentage,
+  100.0 * COUNT(CASE WHEN email = 'email_clicked' THEN 1 END) / COUNT(CASE WHEN email = 'email_sent' THEN 1 END) AS email_clicking_percentage
+FROM (
+  SELECT
+    *,
+    CASE
+      WHEN action IN ('sent_weekly_digest', 'sent_reengagement_email') THEN 'email_sent'
+      WHEN action IN ('email_open') THEN 'email_opened'
+      WHEN action IN ('email_clickthrough') THEN 'email_clicked'
+    END AS email
+  FROM
+    email_events
+) email_action;
 
 
 
